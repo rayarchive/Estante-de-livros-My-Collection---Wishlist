@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>Estante Widget - Página B (Responsiva)</title>
+    <style>
+        /* --- VARIÁVEIS DE COR --- */
+        :root {
+            --shelf-bg: #0d0d0d;
+            --shelf-border: #1a1a1a;
+            --shelf-divider: #252525;
+            --shelf-gradient-start: #050505;
+            --shelf-gradient-end: #161616;
+            --shelf-shadow-top: rgba(0,0,0,0.2);
+            --text-color: white;
+            --tooltip-bg: #000;
+            --tooltip-border: #444;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --text-color: #1a1a1a;
+                --tooltip-bg: #333;
+                --tooltip-border: #999;
+            }
+        }
+
+        /* --- ESTILO GERAL --- */
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+            overflow-x: hidden;
+        }
+
+        /* O MÓVEL */
+        .furniture-wrapper {
+            width: 95%;
+            max-width: 420px;
+            margin: 20px auto 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* A PARTE DE CIMA (ESTANTE) */
+        .bookshelf-container {
+            width: 100%;
+            background-color: var(--shelf-bg);
+            border: 15px solid var(--shelf-border);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            box-shadow: 10px 10px 30px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        .bookshelf-container::before {
+            content: '';
+            position: absolute;
+            top: -25px;
+            left: -15px;
+            right: -15px;
+            height: 25px;
+            background: var(--shelf-border);
+            border-radius: 4px 4px 0 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        /* AS PRATELEIRAS */
+        .shelf-row {
+            height: 155px;
+            border-bottom: 12px solid var(--shelf-divider);
+            display: flex;
+            align-items: flex-end;
+            padding: 0 2px 0 0;
+            background: linear-gradient(to bottom, var(--shelf-gradient-start), var(--shelf-gradient-end));
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        .shelf-row:last-of-type {
+            border-bottom: none !important;
+            background: transparent !important;
+        }
+
+        .shelf-row::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background: var(--shelf-shadow-top);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .shelf-footer {
+            width: calc(100% + 2px);
+            height: 55px;
+            background: var(--shelf-border);
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.6);
+            position: relative;
+            margin-top: -1px;
+            z-index: 5;
+        }
+
+        /* O LIVRO */
+        .book, a.book-link {
+            margin-right: 1px;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 1px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.9);
+            transition: transform 0.2s;
+            cursor: pointer;
+            position: relative;
+            flex-shrink: 0;
+            display: block;
+            text-decoration: none;
+        }
+
+        .book:hover, a.book-link:hover {
+            transform: translateY(-6px);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(255,255,255,0.15);
+        }
+
+        /* PREVIEW AMPLIADO (aparece ao passar o mouse) */
+        #zoom-preview {
+            position: fixed;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(0.92);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            background: transparent;
+        }
+
+        #zoom-preview.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #zoom-img {
+            display: block;
+            max-height: 65vh;
+            max-width: 90vw;
+            filter: drop-shadow(0 10px 25px rgba(0,0,0,0.6));
+        }
+    </style>
+</head>
+<body>
+
+    <div class="furniture-wrapper">
+        <div class="bookshelf-container" id="bookshelf">
+            <div class="shelf-row"></div>
+            <div class="shelf-row"></div>
+            <div class="shelf-row"></div>
+            <div class="shelf-row"></div>
+            <div class="shelf-row"></div>
+            <div class="shelf-row"></div>
+        </div>
+
+        <div class="shelf-footer"></div>
+    </div>
+
+    <div id="zoom-preview">
+        <img id="zoom-img" src="" alt="">
+    </div>
+
+    <script>
+        /* =======================================================
+           >>> AQUI É ONDE VOCÊ CADASTRA OS LIVROS <<<
+
+           Copie e cole um bloco { ... }, para cada volume.
+           Campos:
+             series -> Nome da obra           (obrigatório)
+             vol    -> Número do volume       (use 0 ou apague a linha se for volume único)
+             url    -> URL pública da imagem da lombada (obrigatório)
+             link   -> URL da página do Notion (apague a linha se não tiver)
+             h_cm   -> Altura em centímetros  (padrão 19)
+             w_cm   -> Espessura em centímetros (padrão 1.5)
+
+           Não esqueça da vírgula entre um bloco e o outro.
+        ======================================================= */
+
+        const MEUS_LIVROS = [
+            {
+                series: "A Caixa Vermelha",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/A-Caixa-Vermelha-Vol-1-33ed0c17411c80e99cf9e8c659cdcfba",
+                h_cm: 19,
+                w_cm: 1.5
+            },
+            {
+                series: "A Família Addams: Álbum de Família",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Charles%20Addams.png",
+                link: "https://app.notion.com/p/A-Fam-lia-Addams-lbum-de-Fam-lia-2d8d0c17411c808ba9f9c9b96afa8a35",
+                h_cm: 23,
+                w_cm: 2
+            },
+            {
+                series: "A Semente",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/A-Semente-33ed0c17411c8017ba79f2c811c71d29",
+                h_cm: 21,
+                w_cm: 1
+            },
+            {
+                series: "Cartuns e Cartas",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Cartuns-e-Cartas-33ed0c17411c80198c9fc6dcf47e7371",
+                h_cm: 23,
+                w_cm: 2
+            },
+            {
+                series: "Colégio Ouran Host Club",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Col-gio-Ouran-Host-Club-Edi-o-De-Luxo-01-380d0c17411c80f29370f992c2ca4832",
+                h_cm: 20,
+                w_cm: 1.5  },
+            {
+                series: "Colégio Ouran Host Club",
+                vol: 2,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Col-gio-Ouran-Host-Club-Edi-o-De-Luxo-02-3ced0c17411c80ed91e2f168c066f276",
+                h_cm: 20,
+                w_cm: 1.5
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/1.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-01-2d9d0c17411c80189924c5cbd8ac6fd7",
+                h_cm: 20,
+                w_cm: 1.3  
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 2,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/2.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-02-2d9d0c17411c807c82cfe32fba68ae74",
+                h_cm: 20,
+                w_cm: 1.3  
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 3,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/3.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-03-2d9d0c17411c80bf8becdfd3966172d8",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 4,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/4.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-04-2d9d0c17411c807a9f53cbe95360aae2",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 5,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/5.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-05-2d9d0c17411c803fb56bd1b17b1dce25",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 6,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/6.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-06-2d9d0c17411c8016a0bdc1340f51a86c",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 7,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/7.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-07-2d9d0c17411c8047b93eef9766f06761",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 8,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/8.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-08-2d9d0c17411c80939d90ff3d3a8deca7",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 9,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/9.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-09-2d9d0c17411c80e2835bd975bffae915?source=copy_link",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 10,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/10.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-10-2d9d0c17411c8050bc5edb3c3df3bdab",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 11,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/11.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-11-2d9d0c17411c80bb9b71d24e361e83f6",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 12,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-12-2d9d0c17411c8081b240dfe11656baa7",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Diários de uma Apotecária",
+                vol: 15,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Di%C3%A1rios%20de%20uma%20Apotec%C3%A1ria/15.png",
+                link: "https://app.notion.com/p/Di-rios-de-uma-Apotec-ria-15-2d9d0c17411c80cdb640cf7ded7a8b8a",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Dragões também comem cheesecake",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Drag%C3%B5es%20tamb%C3%A9m%20comem%20cheesecake.png",
+                link: "https://app.notion.com/p/Drag-es-tamb-m-comem-cheesecake-33ed0c17411c80d7a362d58ed39dddc7",
+                h_cm: 21,
+                w_cm: 1  
+            },
+            {
+                series: "Escola de Bruxinhas",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Escola%20de%20Bruxinhas.png",
+                link: "https://app.notion.com/p/Escola-de-Bruxinhas-33ed0c17411c806b924ed40381bff272",
+                h_cm: 21,
+                w_cm: 1   
+            },
+            {
+                series: "Força, Nakamura!!",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/For%C3%A7a%2C%20Nakamura/1.png",
+                link: "https://app.notion.com/p/For-a-Nakamura-2d9d0c17411c800fb3c5def164df560b",
+                h_cm: 18,
+                w_cm: 1.5   
+            },
+            {
+                series: "Helen de Wyndhorn",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Helen%20de%20Wyndhorn.png",
+                link: "https://app.notion.com/p/Helen-de-Wyndhorn-2d9d0c17411c80b6a598ce0af7be206d",
+                h_cm: 26,
+                w_cm: 1.4   
+            },
+            {
+                series: "Hibi Tsuzuku: e a vida continua",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Hibi-Tsuzuku-e-a-vida-continua-33ed0c17411c8022a159d93cf25baee4",
+                h_cm: 20,
+                w_cm: 1.3   
+            },
+            {
+                series: "Mais Força, Nakamura!!",
+                vol: 2,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/For%C3%A7a%2C%20Nakamura/2.png",
+                link: "https://app.notion.com/p/Mais-For-a-Nakamura-2d9d0c17411c806fa42af5c0efc4ef35",
+                h_cm: 18,
+                w_cm: 1.5   
+            },
+            {
+                series: "Maldição!!!",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Maldi-o-3b1d0c17411c8013a53ee717c1d2ef8b?source=copy_link",
+                h_cm: 21,
+                w_cm: 2   
+            },
+            {
+                series: "Mordida",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/Mordida.png",
+                link: "https://app.notion.com/p/Mordida-2d9d0c17411c807591d5da2b56ea77cf",
+                h_cm: 20.6,
+                w_cm: 1.4   
+            },
+            {
+                series: "Nastya o Monstro",
+                vol: 1,
+                url: "https://st3.depositphotos.com/12318692/15342/i/450/depositphotos_153429812-stock-photo-no-signal-tv-seamless-texture.jpg",
+                link: "https://app.notion.com/p/Nastya-o-Monstro-33ed0c17411c80a28cc4d5295731940e",
+                h_cm: 21,
+                w_cm: 1.5   
+            },
+            {
+                series: "O Fantasma de Anya",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20fantasma%20de%20Anya.png",
+                link: "https://app.notion.com/p/O-Fantasma-de-Anya-2d9d0c17411c80e0b8e1f74743e1ab72",
+                h_cm: 23,
+                w_cm: 2   
+            },
+            {
+                series: "O Príncipe e a Costureira",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20Pr%C3%ADncipe%20e%20a%20Costureira.png",
+                link: "https://app.notion.com/p/O-Pr-ncipe-e-a-Costureira-2d9d0c17411c808cb671e49e8b2e78da",
+                h_cm: 23.6,
+                w_cm: 2.6   
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%9Anico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(Novel)/1.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Livro-1-2d9d0c17411c80fc9e1ccfb3b061018b",
+                h_cm: 21,
+                w_cm: 2   
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 2,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%9Anico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(Novel)/2.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Livro-2-2d9d0c17411c806cbf2aeb139d1b7b60",
+                h_cm: 21,
+                w_cm: 2   
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 3,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%9Anico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(Novel)/3.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Livro-3-2dad0c17411c8061aeb3f5c76f73535a",
+                h_cm: 21,
+                w_cm: 2   
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 4,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%9Anico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(Novel)/4.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Livro-4-2dad0c17411c800f82dfe1bb5afb10ae",
+                h_cm: 21,
+                w_cm: 2   
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 5,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%9Anico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(Novel)/5.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Livro-5-2dad0c17411c8046aa8fe78fb8ea1ff0",
+                h_cm: 21,
+                w_cm: 2
+            },
+            {
+                series: "O Único Destino dos Vilões é a Morte",
+                vol: 1,
+                url: "https://raw.githubusercontent.com/rayarchive/Lombadas/refs/heads/main/O%20%C3%BAnico%20Destino%20dos%20Vil%C3%B5es%20%C3%A9%20a%20Morte%20(manhwa)/1.png",
+                link: "https://app.notion.com/p/O-nico-Destino-dos-Vil-es-a-Morte-Volume-1-2dad0c17411c80c891a3efbf6dc5c1db",
+                h_cm: 21,
+                w_cm: 2  
+            }
+        ];
+      
+        /* ======= FIM DA ÁREA DE CADASTRO ======= */
+
+        // Escala: quantos pixels equivale 1 cm. Aumente para livros maiores.
+        const PIXELS_PER_CM = 5;
+
+        // Ordena alfabeticamente e por volume, ignorando entradas incompletas
+        const livros = MEUS_LIVROS
+            .filter(b => b && b.series && b.url)
+            .slice()
+            .sort((a, b) => {
+                const sa = a.series.toLowerCase();
+                const sb = b.series.toLowerCase();
+                if (sa < sb) return -1;
+                if (sa > sb) return 1;
+                return (a.vol || 0) - (b.vol || 0);
+            });
+
+        function renderShelf() {
+            const rows = document.querySelectorAll('.shelf-row');
+            rows.forEach(r => r.innerHTML = '');
+
+            // Largura real da prateleira (mantém a responsividade no Notion)
+            const rowWidth = rows[0].offsetWidth - 2;
+
+            let currentRow = 0;
+            let currentWidthUsed = 0;
+
+            livros.forEach(book => {
+                const heightPx = (book.h_cm || 19) * PIXELS_PER_CM;
+                const widthPx = (book.w_cm || 1.5) * PIXELS_PER_CM;
+
+                // Se não couber na prateleira atual, pula para a próxima
+                if (currentWidthUsed + widthPx > rowWidth) {
+                    currentRow++;
+                    currentWidthUsed = 0;
+                }
+
+                if (!rows[currentRow]) return;
+
+                let bookEl;
+                if (book.link) {
+                    bookEl = document.createElement('a');
+                    bookEl.className = 'book-link';
+                    bookEl.href = book.link.startsWith('http') ? book.link : 'https://' + book.link;
+                    bookEl.target = '_blank';
+                    bookEl.rel = 'noopener';
+                } else {
+                    bookEl = document.createElement('div');
+                    bookEl.className = 'book';
+                }
+
+                bookEl.style.backgroundImage = `url('${book.url.replace(/\s/g, '%20')}')`;
+                bookEl.style.height = `${heightPx}px`;
+                bookEl.style.width = `${widthPx}px`;
+
+                const displayVol = book.vol > 0 ? ` #${book.vol}` : '';
+                const title = `${book.series}${displayVol}`;
+                bookEl.setAttribute('data-title', title);
+
+                attachZoom(bookEl, book, title, widthPx, heightPx);
+
+                rows[currentRow].appendChild(bookEl);
+                currentWidthUsed += widthPx + 1; // +1 da margem
+            });
+        }
+
+        // --- ZOOM AO PASSAR O MOUSE ---
+        const preview = document.getElementById('zoom-preview');
+        const previewImg = document.getElementById('zoom-img');
+
+        // Escala: quantas vezes maior que a lombada real o preview fica.
+        const PREVIEW_SCALE = 8;
+
+        function movePreview(e) {
+            const box = preview.getBoundingClientRect();
+            let x = e.clientX + 20;
+            let y = e.clientY - box.height / 2;
+
+            // Não deixa o preview sair da tela
+            if (x + box.width > window.innerWidth - 8) x = e.clientX - box.width - 20;
+            if (x < 8) x = 8;
+            if (y < 8) y = 8;
+            if (y + box.height > window.innerHeight - 8) y = window.innerHeight - box.height - 8;
+
+            preview.style.left = `${x}px`;
+            preview.style.top = `${y}px`;
+        }
+
+        function attachZoom(el, book, title, widthPx, heightPx) {
+            el.addEventListener('mouseenter', (e) => {
+                previewImg.src = book.url.replace(/\s/g, '%20');
+                previewImg.alt = '';
+
+                previewImg.style.height = `${heightPx * PREVIEW_SCALE}px`;
+                previewImg.style.width = 'auto';
+
+                preview.classList.add('visible');
+                movePreview(e);
+            });
+
+            el.addEventListener('mousemove', movePreview);
+
+            el.addEventListener('mouseleave', () => {
+                preview.classList.remove('visible');
+            });
+        }
+
+        window.addEventListener('resize', renderShelf);
+        window.addEventListener('load', renderShelf);
+        renderShelf();
+    </script>
+</body>
+</html>
