@@ -483,23 +483,15 @@
                 w_cm: 2  
             }
         ];
-      
+
         /* ======= FIM DA ÁREA DE CADASTRO ======= */
 
         // Escala: quantos pixels equivale 1 cm. Aumente para livros maiores.
         const PIXELS_PER_CM = 5;
 
-        // Ordena alfabeticamente e por volume, ignorando entradas incompletas
-        const livros = MEUS_LIVROS
-            .filter(b => b && b.series && b.url)
-            .slice()
-            .sort((a, b) => {
-                const sa = a.series.toLowerCase();
-                const sb = b.series.toLowerCase();
-                if (sa < sb) return -1;
-                if (sa > sb) return 1;
-                return (a.vol || 0) - (b.vol || 0);
-            });
+        // Mantém a ordem em que os livros foram cadastrados no código acima,
+        // apenas removendo entradas incompletas (sem nome ou sem imagem).
+        const livros = MEUS_LIVROS.filter(b => b && b.series && b.url);
 
         function renderShelf() {
             const rows = document.querySelectorAll('.shelf-row');
